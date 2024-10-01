@@ -1,1 +1,3 @@
-# django3-todo
+# django shop
+
+пример приложения магазина для практики django
