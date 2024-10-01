@@ -1,0 +1,29 @@
+{% extends 'shopapp/base.html' %}
+
+{% block title %}
+    Products List
+{% endblock %}
+
+{% block body %}
+    <H1>Products:</H1>
+    <div>
+        {% if products%}
+        {% for product in products %}
+            <div>
+                <p>Name: {{ product.name }} </p>
+                <p>Price: {{ product.price }} </p>
+                <p>Discount: {% firstof product.discount 'no discount' %} </p>
+            </div>
+        {% endfor%}
+        {% else %}
+        <H3>No products yet</H3>
+        {% endif %}
+    </div>
+
+    <div>
+        <a href="{% url 'shopapp:product_create' %}" 
+        >Create a new product
+    </a>
+    </div>
+    
+{% endblock %}

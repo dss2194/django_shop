@@ -1,0 +1,49 @@
+{% extends 'shopapp/base.html' %}
+
+{% block title %}
+    Blog
+{% endblock %}
+
+
+
+{% block body %}
+    <H1>IT Blog info</H1>
+
+    <H2>Привет, {{ username|title}}!</H2>
+
+    <H3>Databases</H3>
+    <div>
+        <ul>
+            {% for name, count in databases %}
+                <li>
+                    {{ name }} ({{ name|length }}) installed count {{ count|add:plus_count }}
+                </li>
+                {% if name|length_is:'8' %}
+                    <span>Useful database!</span>
+                {% endif %}
+
+            {% empty %}
+                No database here
+            {% endfor%}
+        </ul>
+    </div>
+
+    <H3>Webservers</H3>
+    <div>
+        <ul>
+            {% for name, count in webservers %}
+                <li>
+                    {{ name }} ({{ name|length }}) installed count {{ count|add:10 }}
+                </li>
+
+            {% empty %}
+                No Webservers here
+            {% endfor%}
+        </ul>
+    </div>
+
+    <div>
+        {% lorem 5 p random %}
+    </div>
+
+{% endblock %}
