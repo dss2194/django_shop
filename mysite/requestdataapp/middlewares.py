@@ -5,7 +5,7 @@ from django.utils.deprecation import MiddlewareMixin
 
 class ThrottleMiddleware(MiddlewareMixin):
     # Определите лимит времени (в секундах) между запросами
-    TIME_LIMIT = 5  # 5 секунд
+    TIME_LIMIT = 20  # 5 секунд
 
     # Хранилище для хранения времени последнего запроса по IP
     ip_request_times = {}
