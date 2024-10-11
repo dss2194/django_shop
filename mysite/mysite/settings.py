@@ -12,6 +12,14 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn="https://b2f6c253e7b444f6f236f4e875fe1ebd@o4506996954562560.ingest.us.sentry.io/4508104764948480",
+    traces_sample_rate=1.0,
+    profiles_sample_rate=1.0,
+)
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -26,6 +34,8 @@ SECRET_KEY = 'django-insecure-x&$occt9*7^wdc%ej#d6!q6z*x+s4(--x%i)+4keu48!#%0gsk
 DEBUG = True
 
 ALLOWED_HOSTS = []
+
+
 
 
 # Application definition
