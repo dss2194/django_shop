@@ -1,0 +1,34 @@
+{% extends 'shopapp/base.html' %}
+
+{% block title %}
+    Main Shop page
+{% endblock %}
+
+{% block body %}
+  <h1>Menu</h1>
+
+  <div>
+    <a href="{% url 'shopapp:products_list' %}" 
+    > Products list
+    </a>
+  </div>
+
+  <div>
+    <a href="{% url 'shopapp:product_create' %}" 
+    >Create a new product
+  </a>
+  </div>
+
+  <div>
+    <a href="{% url 'shopapp:orders_list' %}" 
+     > Order list
+     </a>
+ </div>
+
+</div>
+  <div>
+    <a href="{% url 'shopapp:order_create' %}" 
+    >Create a new order
+    </a>
+  </div>
+
