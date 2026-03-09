@@ -1,17 +1,14 @@
-# pull official base image
-FROM python:3.11.4-slim-buster
+FROM python:3.10
 
-# set work directory
-WORKDIR /usr/src/app
-
-# set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-# install dependencies
-RUN pip install --upgrade pip
-COPY ./requirements.txt .
-RUN pip install -r requirements.txt
+WORKDIR /app
 
-# copy project
-COPY . .
+RUN pip install --upgrade pip 'poetry==1.8.3'
+RUN poetry config virtualenvs.create false --local
+COPY poetry.lock pyproject.toml ./
+RUN poetry install --no-root
+
+COPY mysite .
+
+#CMD ["gunicorn", "mysite.wsgi:application", "--bind"]

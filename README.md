@@ -1,12 +1,30 @@
-# django shop
+# Django App
 
-пример приложения магазина для практики django
+## Install
 
-## TODO
+- docker
+- git
 
-1. меню
+```bash
+apt update && apt install git curl -y
+curl -fsSL https://get.docker.com | bash
+```
 
-    Желательно добавить главную страницу(привязать к корню `http://127.0.0.1:8000/`) + небольшое меню, чтобы можно было перейти на все страницы.
-    пока не понятно как вывести в html список ссылок
-2. Валидаторы
-    на формы навесить разных валидаторов для практики `https://docs.djangoproject.com/en/4.2/ref/validators/`
+## configure
+
+```bash
+cd /opt
+git clone https://gitlab.com/myskillbox_learn/app_django.git
+cd app_django/
+cp .env.template .env
+openssl rand -hex 32
+```
+
+## start app
+
+```bash
+docker compose build app
+docker compose up -d app
+docker compose exec app python manage.py migrate
+docker compose exec app python manage.py createsuperuser
+```

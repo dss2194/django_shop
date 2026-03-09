@@ -1,33 +1,31 @@
-"""
-В этом модуле лежат различные наборы представлений.
-
-Разные view по товарам, заказам и т.д.
-"""
-
+from csv import DictWriter
 from timeit import default_timer
 
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, reverse
 from django.urls import reverse_lazy
+from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from django.views.decorators.cache import cache_page
+from django.core.cache import cache
+
+from rest_framework.parsers import MultiPartParser
+from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.viewsets import ModelViewSet
+from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 
+from .common import save_csv_products
 from .forms import ProductForm
 from .models import Product, Order, ProductImage
 from .serializers import ProductSerializer
 
 
-@extend_schema(description="Product views CRUD")
 class ProductViewSet(ModelViewSet):
-    """
-    Набор представлений для действий над Product
-    Полный CRUD для сущностей товара
-    """
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     filter_backends = [
@@ -49,16 +47,52 @@ class ProductViewSet(ModelViewSet):
         "discount",
     ]
 
-    @extend_schema(
-        summary="Get product by id",
-        description="Retrieve **product**, return 404 if not found",
-        responses={200: ProductSerializer,
-                   404: OpenApiResponse(description="Empty response, product not found")},)
-    def retrieve(self, *args, **kwargs):
-        return super().retrieve(*args, **kwargs)
+    @method_decorator(cache_page(60 * 2))
+    def list(self, *args, **kwargs):
+        print("list")
+        return super().list(*args, **kwargs)
+
+    @action(methods=["get"], detail=False)
+    def download_csv(self, request: Request):
+        response = HttpResponse(content_type="text/csv")
+        filename = "products-export.csv"
+        response["Content-Disposition"] = f"attachment; filename={filename}"
+        queryset = self.filter_queryset(self.get_queryset())
+        fields = [
+            "name",
+            "description",
+            "price",
+            "discount",
+        ]
+        queryset = queryset.only(*fields)
+        writer = DictWriter(response, fieldnames=fields)
+        writer.writeheader()
+
+        for product in queryset:
+            writer.writerow({
+                field: getattr(product, field)
+                for field in fields
+            })
+
+        return response
+
+    @action(
+        detail=False,
+        methods=["post"],
+        parser_classes=[MultiPartParser],
+    )
+    def upload_csv(self, request: Request):
+        products = save_csv_products(
+            request.FILES["file"].file,
+            encoding=request.encoding,
+        )
+        serializer = self.get_serializer(products, many=True)
+        return Response(serializer.data)
 
 
 class ShopIndexView(View):
+
+    @method_decorator(cache_page(60 * 2, key_prefix="shop-index-key-prefix"))
     def get(self, request: HttpRequest) -> HttpResponse:
         products = [
             ('Laptop', 1999),
@@ -69,19 +103,18 @@ class ShopIndexView(View):
             "time_running": default_timer(),
             "products": products,
         }
+        # print("shop index context", context)
         return render(request, 'shopapp/shop-index.html', context=context)
 
 
 class ProductDetailsView(DetailView):
     template_name = "shopapp/products-details.html"
-    # model = Product
     queryset = Product.objects.prefetch_related("images")
     context_object_name = "product"
 
 
 class ProductsListView(ListView):
     template_name = "shopapp/products-list.html"
-    # model = Product
     context_object_name = "products"
     queryset = Product.objects.filter(archived=False)
 
@@ -131,6 +164,7 @@ class OrdersListView(LoginRequiredMixin, ListView):
         Order.objects
         .select_related("user")
         .prefetch_related("products")
+        .all()
     )
 
 
@@ -145,14 +179,22 @@ class OrderDetailView(PermissionRequiredMixin, DetailView):
 
 class ProductsDataExportView(View):
     def get(self, request: HttpRequest) -> JsonResponse:
-        products = Product.objects.order_by('pk').all()
-        products_data = [
-            {
-                "pk": product.pk,
-                "name": product.name,
-                "price": product.price,
-                "archived": product.archived,
-            }
-            for product in products
-        ]
+        cache_key = "products_data_export"
+        # Check if the data already exists in the cache
+        products_data = cache.get(cache_key)
+
+        # If the data is not already cached, generate it and cache it
+        if products_data is None:
+            products = Product.objects.order_by('pk').all()
+            products_data = [
+                {
+                    "pk": product.pk,
+                    "name": product.name,
+                    "price": product.price,
+                    "archived": product.archived,
+                }
+                for product in products
+            ]
+            cache.set(cache_key, products_data, 300)
+
         return JsonResponse({"products": products_data})
