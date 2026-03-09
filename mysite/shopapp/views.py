@@ -1,83 +1,158 @@
-from django.shortcuts import render, redirect
-from django.urls import reverse
-from django.http import HttpRequest, HttpResponse
-from django.contrib.auth.models import Group
-from .forms import ProductForm, OrderForm
-from .models import Product, Order
+"""
+В этом модуле лежат различные наборы представлений.
+
+Разные view по товарам, заказам и т.д.
+"""
+
+from timeit import default_timer
+
+from django.http import HttpResponse, HttpRequest, HttpResponseRedirect, JsonResponse
+from django.shortcuts import render, reverse
+from django.urls import reverse_lazy
+from django.views import View
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from drf_spectacular.utils import extend_schema, OpenApiResponse
+from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.viewsets import ModelViewSet
+from django_filters.rest_framework import DjangoFilterBackend
+
+from .forms import ProductForm
+from .models import Product, Order, ProductImage
+from .serializers import ProductSerializer
 
 
-def main_index(request: HttpRequest):
-    databases = [
-        ('Mysql', 10),
-        ('Postgres', 20),
-        ('Mssql', 30),
+@extend_schema(description="Product views CRUD")
+class ProductViewSet(ModelViewSet):
+    """
+    Набор представлений для действий над Product
+    Полный CRUD для сущностей товара
+    """
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    filter_backends = [
+        SearchFilter,
+        DjangoFilterBackend,
+        OrderingFilter,
     ]
-    
-    webservers = [
-        ('nginx', 400),
-        ('apache', 120),
-        ('caddy', 80),
+    search_fields = ["name", "description"]
+    filterset_fields = [
+        "name",
+        "description",
+        "price",
+        "discount",
+        "archived",
     ]
-    
-    username = 'user'
-    plus_count = 50
-    
-    context = {
-        "databases": databases,
-        "webservers": webservers,
-        "username": username,
-        "plus_count": plus_count
-    }
-    return render(request, 'shopapp/shop.html', context=context)
+    ordering_fields = [
+        "name",
+        "price",
+        "discount",
+    ]
 
-def groups_list(request: HttpRequest):
-    context = {
-        "groups": Group.objects.prefetch_related('permissions').all(),
-    }
-    return render(request, 'shopapp/groups-list.html', context=context)
+    @extend_schema(
+        summary="Get product by id",
+        description="Retrieve **product**, return 404 if not found",
+        responses={200: ProductSerializer,
+                   404: OpenApiResponse(description="Empty response, product not found")},)
+    def retrieve(self, *args, **kwargs):
+        return super().retrieve(*args, **kwargs)
 
 
-def products_list(request: HttpRequest):
-    context = {
-        "products": Product.objects.all(),
-    }
-    return render(request, 'shopapp/products-list.html', context=context)
+class ShopIndexView(View):
+    def get(self, request: HttpRequest) -> HttpResponse:
+        products = [
+            ('Laptop', 1999),
+            ('Desktop', 2999),
+            ('Smartphone', 999),
+        ]
+        context = {
+            "time_running": default_timer(),
+            "products": products,
+        }
+        return render(request, 'shopapp/shop-index.html', context=context)
 
 
-def create_product(request: HttpRequest) -> HttpResponse:
-    if request.method == "POST":
-        form = ProductForm(request.POST)
-        if form.is_valid():
-            form.save()
-            url = reverse("shopapp:products_list")
-            return redirect(url)
-    else:
-        form = ProductForm()
-    context = {
-        "form": form,
-    }
-    return render(request, 'shopapp/create-product.html', context=context)
-
-def orders_list(request: HttpRequest):
-    context = {
-        "orders": Order.objects.select_related("user").prefetch_related("products").all(),
-    }
-    return render(request, 'shopapp/orders-list.html', context=context)
+class ProductDetailsView(DetailView):
+    template_name = "shopapp/products-details.html"
+    # model = Product
+    queryset = Product.objects.prefetch_related("images")
+    context_object_name = "product"
 
 
-def create_order(request: HttpRequest) -> HttpResponse:
-    if request.method == "POST":
-        form = OrderForm(request.POST)
-        if form.is_valid():
-            form.save()
-            url = reverse("shopapp:orders_list")
-            return redirect(url)
-    else:
-        form = OrderForm()
-    context = {
-        "form": form,
-    }
-    return render(request, 'shopapp/create-order.html', context=context)
+class ProductsListView(ListView):
+    template_name = "shopapp/products-list.html"
+    # model = Product
+    context_object_name = "products"
+    queryset = Product.objects.filter(archived=False)
 
-def main_shop_page(request: HttpRequest) -> HttpResponse:
-    return render(request, 'shopapp/mainshop.html')
+
+class ProductCreateView(CreateView):
+    model = Product
+    fields = "name", "price", "description", "discount", "preview"
+    success_url = reverse_lazy("shopapp:products_list")
+
+
+class ProductUpdateView(UpdateView):
+    model = Product
+    # fields = "name", "price", "description", "discount", "preview"
+    template_name_suffix = "_update_form"
+    form_class = ProductForm
+
+    def get_success_url(self):
+        return reverse(
+            "shopapp:product_details",
+            kwargs={"pk": self.object.pk},
+        )
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        for image in form.files.getlist("images"):
+            ProductImage.objects.create(
+                product=self.object,
+                image=image,
+            )
+
+        return response
+
+
+class ProductDeleteView(DeleteView):
+    model = Product
+    success_url = reverse_lazy("shopapp:products_list")
+
+    def form_valid(self, form):
+        success_url = self.get_success_url()
+        self.object.archived = True
+        self.object.save()
+        return HttpResponseRedirect(success_url)
+
+
+class OrdersListView(LoginRequiredMixin, ListView):
+    queryset = (
+        Order.objects
+        .select_related("user")
+        .prefetch_related("products")
+    )
+
+
+class OrderDetailView(PermissionRequiredMixin, DetailView):
+    permission_required = "shopapp.view_order"
+    queryset = (
+        Order.objects
+        .select_related("user")
+        .prefetch_related("products")
+    )
+
+
+class ProductsDataExportView(View):
+    def get(self, request: HttpRequest) -> JsonResponse:
+        products = Product.objects.order_by('pk').all()
+        products_data = [
+            {
+                "pk": product.pk,
+                "name": product.name,
+                "price": product.price,
+                "archived": product.archived,
+            }
+            for product in products
+        ]
+        return JsonResponse({"products": products_data})
